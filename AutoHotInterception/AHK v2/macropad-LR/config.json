@@ -1,0 +1,114 @@
+{
+  "active_device": "side_keyboard",
+  "devices": {
+    "side_keyboard": {
+      "label": "SIDE-KEYBOARD",
+      "vid": "0818",
+      "pid": "D18A"
+    }
+  },
+  "settings": {
+    "block_original_input": true,
+    "app_specific_mode": true
+  },
+  "apps": {
+    "lightroom": {
+      "label": "Lightroom Desktop",
+      "process": "lightroom.exe",
+      "keys": {
+        "71":  { "label": "7",     "action": "previous_photo" },
+        "72":  { "label": "8",     "action": "next_photo" },
+        "73":  { "label": "9",     "action": "grid_view" },
+        "74":  { "label": "-",     "action": "reject" },
+        "75":  { "label": "4",     "action": "unflag" },
+        "76":  { "label": "5",     "action": "pick" },
+        "77":  { "label": "6",     "action": "detail_view" },
+        "78":  { "label": "+",     "action": "shift_f6_cycle" },
+        "79":  { "label": "1",     "action": "undo" },
+        "80":  { "label": "2",     "action": "redo" },
+        "81":  { "label": "3",     "action": "crop" },
+        "309": { "label": "/",     "action": "remove_tool" },
+        "82":  { "label": "0",     "action": "auto_tone" },
+        "55":  { "label": "*",     "action": "white_balance_picker" },
+        "83":  { "label": ".",     "action": "copy_settings" },
+        "284": { "label": "Enter", "action": "paste_settings" }
+      },
+      "left_encoder": {
+        "cw":    { "label": "LeftEncoder-CW",    "action": "tab_next" },
+        "ccw":   { "label": "LeftEncoder-CCW",   "action": "tab_prev" },
+        "press": { "label": "LeftEncoder-Press", "action": "f6_cycle" }
+      },
+      "right_encoder": {
+        "cw":    { "label": "RightEncoder-CW",    "action": "exposure_up" },
+        "ccw":   { "label": "RightEncoder-CCW",   "action": "exposure_down" },
+        "press": { "label": "RightEncoder-Press", "action": "activate_control" }
+      },
+      "actions": {
+        "previous_photo":       { "keys": "{Left}",  "supported": true },
+        "next_photo":           { "keys": "{Right}", "supported": true },
+        "grid_view":            { "keys": "g",       "supported": true },
+        "detail_view":          { "keys": "d",       "supported": true },
+        "reject":               { "keys": "x",       "supported": true },
+        "pick":                 { "keys": "z",       "supported": true },
+        "unflag":               { "keys": "u",       "supported": true },
+        "undo":                 { "keys": "^z",      "supported": true },
+        "redo":                 { "keys": "+^z",     "supported": true },
+        "crop":                 { "keys": "c",       "supported": true },
+        "remove_tool":          { "keys": "+t",      "supported": true, "note": "Confirmed by user testing" },
+        "auto_tone":            { "keys": "+a",      "supported": true },
+        "white_balance_picker": { "keys": "w",       "supported": true },
+        "copy_settings":        { "keys": "^c",      "supported": true },
+        "paste_settings":       { "keys": "^v",      "supported": true },
+        "tab_next":             { "keys": "{Tab}",   "supported": true },
+        "tab_prev":             { "keys": "+{Tab}",  "supported": true },
+        "f6_cycle":             { "keys": "{F6}",    "supported": true },
+        "shift_f6_cycle":       { "keys": "+{F6}",   "supported": true },
+        "exposure_up":          { "keys": "{Right}", "supported": true, "note": "Only works once Exposure slider is active via F6 nav" },
+        "exposure_down":        { "keys": "{Left}",  "supported": true, "note": "Same caveat as exposure_up" },
+        "activate_control":     { "keys": "{Space}", "supported": true }
+      }
+    },
+    "pixieset": {
+      "label": "Pixieset Photo Editor",
+      "process": "PixiesetPhotoEditor.exe",
+      "keys": {
+        "71":  { "label": "7",     "action": "previous_photo" },
+        "72":  { "label": "8",     "action": "next_photo" },
+        "73":  { "label": "9",     "action": "grid_view" },
+        "74":  { "label": "-",     "action": "" },
+        "75":  { "label": "4",     "action": "" },
+        "76":  { "label": "5",     "action": "focus_view" },
+        "77":  { "label": "6",     "action": "" },
+        "78":  { "label": "+",     "action": "" },
+        "79":  { "label": "1",     "action": "undo" },
+        "80":  { "label": "2",     "action": "redo" },
+        "81":  { "label": "3",     "action": "" },
+        "309": { "label": "/",     "action": "" },
+        "82":  { "label": "0",     "action": "" },
+        "55":  { "label": "*",     "action": "" },
+        "83":  { "label": ".",     "action": "" },
+        "284": { "label": "Enter", "action": "" }
+      },
+      "left_encoder": {
+        "cw":    { "label": "LeftEncoder-CW",    "action": "next_photo" },
+        "ccw":   { "label": "LeftEncoder-CCW",   "action": "previous_photo" },
+        "press": { "label": "LeftEncoder-Press", "action": "" }
+      },
+      "right_encoder": {
+        "cw":    { "label": "RightEncoder-CW",    "action": "" },
+        "ccw":   { "label": "RightEncoder-CCW",   "action": "" },
+        "press": { "label": "RightEncoder-Press", "action": "" }
+      },
+      "actions": {
+        "previous_photo": { "keys": "{Left}",  "supported": true, "note": "Unconfirmed - test first" },
+        "next_photo":     { "keys": "{Right}", "supported": true, "note": "Unconfirmed - test first" },
+        "grid_view":      { "keys": "g",       "supported": true, "note": "Confirmed - Pixieset docs" },
+        "focus_view":     { "keys": "d",       "supported": true, "note": "Confirmed - Pixieset docs" },
+        "undo":           { "keys": "^z",      "supported": true },
+        "redo":           { "keys": "+^z",     "supported": true },
+        "tab_next":       { "keys": "{Tab}",   "supported": true },
+        "tab_prev":       { "keys": "+{Tab}",  "supported": true }
+      }
+    }
+  }
+}

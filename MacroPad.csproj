@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MacroPad</AssemblyName>
+    <RootNamespace>MacroPad</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- We manually AllocConsole() in Program.cs so this works whether run
+         from a terminal or double-clicked, regardless of subsystem. -->
+  </PropertyGroup>
+
+</Project>
