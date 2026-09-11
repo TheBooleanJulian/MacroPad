@@ -129,7 +129,14 @@ KeyEventInner(code, state) {
     codeStr := String(code)
     if !profile["keys"].Has(codeStr)
         return
-    actionName := profile["keys"][codeStr]["action"]
+    entry := profile["keys"][codeStr]
+    ; Direct binding takes priority over named action
+    if entry.Has("keys") && entry["keys"] != "" {
+        try FileAppend(FormatTime(, "HH:mm:ss") " app=" appKey " code=" codeStr " -> direct:" entry["keys"] "`n", A_ScriptDir "\debug.log")
+        SendInput("{Blind}" entry["keys"])
+        return
+    }
+    actionName := entry["action"]
     if actionName = ""
         return
     try FileAppend(FormatTime(, "HH:mm:ss") " app=" appKey " code=" codeStr " -> " actionName "`n", A_ScriptDir "\debug.log")
@@ -154,7 +161,12 @@ HandleRightEncoderInner(dir, nativeKeyName) {
     profile := Config["apps"][appKey]
     if !profile["right_encoder"].Has(dir)
         return
-    actionName := profile["right_encoder"][dir]["action"]
+    entry := profile["right_encoder"][dir]
+    if entry.Has("keys") && entry["keys"] != "" {
+        SendInput("{Blind}" entry["keys"])
+        return
+    }
+    actionName := entry["action"]
     if actionName = ""
         return
     PerformAction(actionName, profile["actions"])
@@ -407,7 +419,7 @@ ShowRemapGui(*) {
     for i, dir in ["ccw", "press", "cw"] {
         entry := profile["left_encoder"][dir]
         lbl := (dir = "ccw") ? "< CCW" : (dir = "press") ? "Press" : "CW >"
-        btn := g.Add("Button", "x" (19 + (i-1)*104) " y128 w100 h54", lbl "`n" GetShortName(entry["action"]))
+        btn := g.Add("Button", "x" (19 + (i-1)*104) " y128 w100 h54", lbl "`n" GetDisplayName(entry))
         btn.OnEvent("Click", OpenCellEditor.Bind(g, currentApp, "left_encoder", dir))
     }
 
@@ -416,7 +428,7 @@ ShowRemapGui(*) {
     for i, dir in ["ccw", "press", "cw"] {
         entry := profile["right_encoder"][dir]
         lbl := (dir = "ccw") ? "< CCW" : (dir = "press") ? "Press" : "CW >"
-        btn := g.Add("Button", "x" (349 + (i-1)*112) " y128 w108 h54", lbl "`n" GetShortName(entry["action"]))
+        btn := g.Add("Button", "x" (349 + (i-1)*112) " y128 w108 h54", lbl "`n" GetDisplayName(entry))
         btn.OnEvent("Click", OpenCellEditor.Bind(g, currentApp, "right_encoder", dir))
     }
 
@@ -430,7 +442,7 @@ ShowRemapGui(*) {
         y := yGrid + row * (cellH + gap)
         if profile["keys"].Has(code) {
             entry := profile["keys"][code]
-            btn := g.Add("Button", "x" x " y" y " w" cellW " h" cellH, entry["label"] "`n" GetShortName(entry["action"]))
+            btn := g.Add("Button", "x" x " y" y " w" cellW " h" cellH, entry["label"] "`n" GetDisplayName(entry))
             btn.OnEvent("Click", OpenCellEditor.Bind(g, currentApp, "keys", code))
         }
     }
@@ -628,15 +640,34 @@ OpenCellEditor(parentGui, appKey, section, key, *) {
         : (section = "left_encoder") ? "Left encoder [" key "]"
         : "Right encoder [" key "]  (not device-specific)"
 
+    currentDirect := entry.Has("keys") ? entry["keys"] : ""
+
     ed := Gui("+Owner" parentGui.Hwnd, "Remap - " Config["apps"][appKey]["label"])
     ed.SetFont("s9", "Segoe UI")
     ed.OnEvent("Close", (*) => ed.Destroy())
     ed.Add("Text", "w520 cGray", Config["apps"][appKey]["label"] " > " dispName)
-    ed.Add("Text", "w520 y+6", "Action:")
+
+    ed.Add("Text", "w520 y+10", "Named action (for apps with predefined shortcuts):")
     dd := ed.Add("DropDownList", "w520 h220 r14 y+4", actionNames)
-    dd.Value := selIdx
-    infoLine := ed.Add("Text", "w520 h28 y+6 cGray", GetActionInfo(actionNames[selIdx], appKey))
+    dd.Value := (currentDirect != "") ? 1 : selIdx
+    infoLine := ed.Add("Text", "w520 h28 y+6 cGray", GetActionInfo(actionNames[dd.Value], appKey))
     dd.OnEvent("Change", OnDdChange)
+
+    ed.Add("Text", "w520 y+10", "Custom binding (overrides named action if filled):")
+    captureBtn  := ed.Add("Button", "w130 h26 y+4", "Capture key...")
+    customEdit  := ed.Add("Edit", "x+8 w378 h26", currentDirect)
+    friendlyTxt := ed.Add("Text", "w520 y+4 cGray",
+        currentDirect != "" ? "= " AHKToDisplay(currentDirect)
+                            : "Click Capture and press a key  —  or type AHK format manually: ^z  +{F5}  {Left}")
+    captureBtn.OnEvent("Click", (*) => StartCapture(captureBtn, customEdit, friendlyTxt))
+    customEdit.OnEvent("Change", OnCustomChange)
+
+    OnCustomChange(*) {
+        v := Trim(customEdit.Value)
+        friendlyTxt.Value := v != "" ? "= " AHKToDisplay(v)
+                                     : "Click Capture and press a key  —  or type AHK format manually: ^z  +{F5}  {Left}"
+    }
+
     ed.Add("Button", "default w80 y+10", "OK").OnEvent("Click", OkClick)
     ed.Add("Button", "x+8 w80", "Cancel").OnEvent("Click", (*) => ed.Destroy())
     ed.Show()
@@ -646,8 +677,18 @@ OpenCellEditor(parentGui, appKey, section, key, *) {
     }
 
     OkClick(*) {
-        selected := actionNames[dd.Value] = "(none)" ? "" : actionNames[dd.Value]
-        Config["apps"][appKey][section][key]["action"] := selected
+        custom := Trim(customEdit.Value)
+        if custom != "" {
+            ; Direct binding — wipe any named action and store the raw key string
+            Config["apps"][appKey][section][key]["action"] := ""
+            Config["apps"][appKey][section][key]["keys"]   := custom
+        } else {
+            ; Named action — clear direct binding
+            selected := actionNames[dd.Value] = "(none)" ? "" : actionNames[dd.Value]
+            Config["apps"][appKey][section][key]["action"] := selected
+            if Config["apps"][appKey][section][key].Has("keys")
+                Config["apps"][appKey][section][key].Delete("keys")
+        }
         ed.Destroy()
         parentGui.Destroy()
         ShowRemapGui()
@@ -659,6 +700,95 @@ GetShortName(actionName) {
     if actionName = ""
         return "(none)"
     return ShortNames.Has(actionName) ? ShortNames[actionName] : SubStr(actionName, 1, 8)
+}
+
+; Use this for grid buttons - shows raw binding string if set, otherwise the action short name.
+GetDisplayName(entry) {
+    global ShortNames
+    if entry.Has("keys") && entry["keys"] != ""
+        return entry["keys"]
+    actionName := entry["action"]
+    if actionName = ""
+        return "(none)"
+    return ShortNames.Has(actionName) ? ShortNames[actionName] : SubStr(actionName, 1, 8)
+}
+
+; Convert an AHK SendInput string to a human-readable label.
+; "^+{F5}" -> "Ctrl+Shift+F5",  "^z" -> "Ctrl+Z",  "{Left}" -> "Left"
+AHKToDisplay(ahkStr) {
+    modMap := Map("^","Ctrl+", "+","Shift+", "!","Alt+", "#","Win+")
+    display := ""
+    i := 1
+    len := StrLen(ahkStr)
+    while i <= len {
+        ch := SubStr(ahkStr, i, 1)
+        if modMap.Has(ch) {
+            display .= modMap[ch]
+            i++
+        } else if ch = "{" {
+            closePos := InStr(ahkStr, "}", false, i + 1)
+            if closePos > 0 {
+                display .= SubStr(ahkStr, i + 1, closePos - i - 1)
+                i := closePos + 1
+            } else {
+                display .= ch
+                i++
+            }
+        } else {
+            display .= StrUpper(ch)
+            i++
+        }
+    }
+    return display
+}
+
+; Build an AHK SendInput-compatible string from a captured key name + modifier prefix.
+BuildAHKString(keyName, mods) {
+    ; Single-character keys (letters, digits) don't need braces in SendInput.
+    ; Everything else (F1, Space, Tab, Left, NumpadX, ...) does.
+    return mods . (StrLen(keyName) = 1 ? keyName : "{" keyName "}")
+}
+
+; Game-style key capture: click, press the combo, done.
+; Uses InputHook so it captures what the user presses on the regular keyboard
+; (Interception only blocks the macro pad, so real-keyboard input reaches this hook fine).
+StartCapture(captureBtn, ahkEdit, friendlyTxt, *) {
+    capturedKey  := ""
+    capturedMods := ""
+
+    CaptureKey(ih, vk, sc) {
+        keyName := GetKeyName(Format("vk{:02X}sc{:03X}", vk, sc))
+        ; Ignore bare modifier presses — keep waiting for the actual key
+        if keyName ~= "i)^(L|R)(Ctrl|Shift|Alt|Win)$"
+            return
+        ; Snapshot modifier state at the exact moment the key was pressed
+        ctrl  := GetKeyState("LCtrl")  || GetKeyState("RCtrl")
+        shift := GetKeyState("LShift") || GetKeyState("RShift")
+        alt   := GetKeyState("LAlt")   || GetKeyState("RAlt")
+        win   := GetKeyState("LWin")   || GetKeyState("RWin")
+        capturedMods := (ctrl ? "^" : "") . (shift ? "+" : "") . (alt ? "!" : "") . (win ? "#" : "")
+        capturedKey  := keyName
+        ih.Stop()
+    }
+
+    captureBtn.Text    := "Waiting...  Esc = cancel"
+    captureBtn.Enabled := false
+
+    ih := InputHook("L0 I T5")        ; L0 = no char limit, I = ignore AHK hotkeys, T5 = 5s timeout
+    ih.KeyOpt("{All}", "S")           ; suppress all keys so they don't reach other apps while capturing
+    ih.OnKeyDown := CaptureKey
+    ih.Start()
+    ih.Wait()
+
+    captureBtn.Text    := "Capture key..."
+    captureBtn.Enabled := true
+
+    if capturedKey = "" || capturedKey = "Escape"
+        return
+
+    ahkStr := BuildAHKString(capturedKey, capturedMods)
+    ahkEdit.Value    := ahkStr
+    friendlyTxt.Value := "= " AHKToDisplay(ahkStr)
 }
 
 GetActionInfo(actionName, appKey) {
@@ -725,16 +855,28 @@ ConfigToJSON(cfg) {
         pL.Push('      "label": "' av["label"] '",')
         pL.Push('      "process": "' av["process"] '",')
         kp := []
-        for code, e in av["keys"]
-            kp.Push('        "' code '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        for code, e in av["keys"] {
+            if e.Has("keys") && e["keys"] != ""
+                kp.Push('        "' code '": { "label": "' e["label"] '", "action": "", "keys": "' e["keys"] '" }')
+            else
+                kp.Push('        "' code '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        }
         pL.Push('      "keys": {') , pL.Push(StrJoin(",`n", kp)) , pL.Push('      },')
         le := []
-        for dir, e in av["left_encoder"]
-            le.Push('        "' dir '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        for dir, e in av["left_encoder"] {
+            if e.Has("keys") && e["keys"] != ""
+                le.Push('        "' dir '": { "label": "' e["label"] '", "action": "", "keys": "' e["keys"] '" }')
+            else
+                le.Push('        "' dir '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        }
         pL.Push('      "left_encoder": {') , pL.Push(StrJoin(",`n", le)) , pL.Push('      },')
         re := []
-        for dir, e in av["right_encoder"]
-            re.Push('        "' dir '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        for dir, e in av["right_encoder"] {
+            if e.Has("keys") && e["keys"] != ""
+                re.Push('        "' dir '": { "label": "' e["label"] '", "action": "", "keys": "' e["keys"] '" }')
+            else
+                re.Push('        "' dir '": { "label": "' e["label"] '", "action": "' e["action"] '" }')
+        }
         pL.Push('      "right_encoder": {') , pL.Push(StrJoin(",`n", re)) , pL.Push('      },')
         ap := []
         for name, action in av["actions"] {
