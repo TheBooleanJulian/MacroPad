@@ -72,28 +72,86 @@ ToggleAppSpecific(*) {
 }
 
 ; ---- Subscribe to device ---------------------------------------------------
-SubscribedAny := false
-startLog := FormatTime(, "HH:mm:ss") " --- startup VID=" Format("{:04X}", TargetVID) " PID=" Format("{:04X}", TargetPID) " ---`n"
-for id, dev in AHI.GetDeviceList() {
-    if (dev.VID = TargetVID && dev.PID = TargetPID && !dev.IsMouse) {
-        AHI.SubscribeKeyboard(id, Config["settings"]["block_original_input"], KeyEvent.Bind(id))
-        SubscribedAny := true
-        startLog .= "  subscribed ID=" id "`n"
+global Subscribed := Map()
+A_TrayMenu.Insert("Edit mapping", "Rescan device", (*) => RescanDevice())
+
+if TrySubscribe(true) {
+    TrayTip("MacroPad Remapper", "Active - " activeDev["label"] ". Right-click to edit mapping.")
+} else {
+    ; Stay alive in the tray so the device picker (Edit mapping) stays reachable
+    ; and the pad can be rescanned once it is plugged in / a different one chosen.
+    A_IconTip := "MacroPad - no device (right-click: Edit mapping / Rescan)"
+    ShowNoDeviceMessage()
+}
+return
+
+RescanDevice() {
+    if TrySubscribe(false) {
+        A_IconTip := "MacroPad Remapper"
+        TrayTip("MacroPad Remapper", "Active - " Config["devices"][Config["active_device"]]["label"])
+    } else {
+        ShowNoDeviceMessage()
     }
 }
-try FileAppend(startLog, A_ScriptDir "\debug.log")
-if !SubscribedAny {
-    MsgBox("No Interception keyboard device found for VID_" Format("{:04X}", TargetVID) " PID_" Format("{:04X}", TargetPID), "MacroPad", "Iconx")
-    ExitApp()
+
+; Subscribes to every matching, not-yet-subscribed keyboard. True if the target is subscribed.
+TrySubscribe(isStartup) {
+    global AHI, Config, TargetVID, TargetPID, Subscribed, SeenDevices, SeenKeyboards
+    startLog := FormatTime(, "HH:mm:ss") (isStartup ? " --- startup" : " --- rescan") " VID=" Format("{:04X}", TargetVID) " PID=" Format("{:04X}", TargetPID) " admin=" A_IsAdmin " ---`n"
+    SeenDevices := AHI.GetDeviceList()
+    SeenKeyboards := ""
+    for id, dev in SeenDevices {
+        startLog .= Format("  seen ID={1} {2} VID={3:04X} PID={4:04X}`n", id, dev.IsMouse ? "Mouse" : "Keyboard", dev.VID, dev.PID)
+        if !dev.IsMouse
+            SeenKeyboards .= Format("  ID {1}: VID_{2:04X} PID_{3:04X}`n", id, dev.VID, dev.PID)
+    }
+    for id, dev in SeenDevices {
+        if (dev.VID = TargetVID && dev.PID = TargetPID && !dev.IsMouse && !Subscribed.Has(id)) {
+            AHI.SubscribeKeyboard(id, Config["settings"]["block_original_input"], KeyEvent.Bind(id))
+            Subscribed[id] := true
+            startLog .= "  subscribed ID=" id "`n"
+        }
+    }
+    try FileAppend(startLog, A_ScriptDir "\debug.log")
+    if (Subscribed.Count = 0)
+        return false
+    ; Right encoder (Volume hotkeys - not device-specific)
+    Hotkey("Volume_Down", (*) => HandleRightEncoder("cw",    "Volume_Down"))
+    Hotkey("Volume_Up",   (*) => HandleRightEncoder("ccw",   "Volume_Up"))
+    Hotkey("Volume_Mute", (*) => HandleRightEncoder("press", "Volume_Mute"))
+    return true
 }
 
-; ---- Right encoder (Volume hotkeys - not device-specific) ------------------
-Hotkey("Volume_Down", (*) => HandleRightEncoder("cw",    "Volume_Down"))
-Hotkey("Volume_Up",   (*) => HandleRightEncoder("ccw",   "Volume_Up"))
-Hotkey("Volume_Mute", (*) => HandleRightEncoder("press", "Volume_Mute"))
-
-TrayTip("MacroPad Remapper", "Active - " activeDev["label"] ". Right-click to edit mapping.")
-return
+ShowNoDeviceMessage() {
+    global SeenDevices, SeenKeyboards, TargetVID, TargetPID
+    msg := "No Interception keyboard device found for VID_" Format("{:04X}", TargetVID) " PID_" Format("{:04X}", TargetPID) "`n`n"
+        . "Running as admin: " (A_IsAdmin ? "yes" : "NO - right-click and run as administrator") "`n"
+        . "Interception devices seen: " SeenDevices.Count "`n"
+    if (SeenKeyboards != "")
+        msg .= "Keyboards seen:`n" SeenKeyboards
+    msg .= "`n"
+    if !A_IsAdmin
+        msg .= "Not elevated, so Interception will see nothing. Run as administrator."
+    else if (SeenDevices.Count = 0)
+        msg .= "Interception sees no devices at all. Check the driver is installed and reboot (this also resets Interception's device-slot counter after replugging)."
+    else {
+        ; Interception has 10 keyboard slots; each replug/wake gives the pad new ones.
+        ; Past log entries show how high its ID got, so we can tell when slots ran out.
+        maxPadId := 0
+        try {
+            for line in StrSplit(FileRead(A_ScriptDir "\debug.log"), "`n") {
+                if RegExMatch(line, "i)seen ID=(\d+) Keyboard VID=" Format("{:04X}", TargetVID) " PID=" Format("{:04X}", TargetPID), &m)
+                    maxPadId := Max(maxPadId, Integer(m[1]))
+            }
+        }
+        if (maxPadId >= 9)
+            msg .= "Interception's 10 keyboard slots look used up (the pad was last seen at ID " maxPadId " after repeated replugs/sleeps). Reboot with the pad plugged in to reset them."
+        else
+            msg .= "Interception sees other devices but not this one. If the pad was replugged or woke from sleep, reboot to reset Interception's slots; otherwise pick a different device via Edit mapping, or run Diagnostic.ahk and check the VID/PID in config.json."
+    }
+    msg .= "`n`nMacroPad is still running in the tray: use Edit mapping to pick another device, or Rescan device after plugging one in.`n`nDetails logged to debug.log."
+    MsgBox(msg, "MacroPad", "Iconx")
+}
 
 ; ============================================================================
 ; CORE ROUTING
